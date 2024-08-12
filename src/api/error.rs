@@ -64,4 +64,7 @@ pub enum Error {
 
     #[error("Wrong server address: {0}")]
     WrongServerAddress(String),
+
+    #[error("operation timed out")]
+    TimeoutError,
 }

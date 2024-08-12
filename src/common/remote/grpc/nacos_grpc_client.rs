@@ -72,6 +72,7 @@ pub(crate) struct NacosGrpcClientBuilder {
     disconnected_listener: Option<DisconnectedListener>,
     unary_call_layer: Option<DynamicUnaryCallLayer>,
     bi_call_layer: Option<DynamicBiStreamingCallLayer>,
+    client_timeout: Option<Duration>,
 }
 
 impl NacosGrpcClientBuilder {
@@ -89,6 +90,7 @@ impl NacosGrpcClientBuilder {
             disconnected_listener: None,
             unary_call_layer: None,
             bi_call_layer: None,
+            client_timeout:None,
         }
     }
 
@@ -135,6 +137,13 @@ impl NacosGrpcClientBuilder {
     pub(crate) fn support_naming_remote_metric(mut self, enable: bool) -> Self {
         self.client_abilities.support_naming_remote_metric(enable);
         Self { ..self }
+    }
+
+    pub (crate) fn client_timeout(mut self, client_timeout: Option<Duration>) -> Self {
+        Self {
+            client_timeout,
+            ..self
+        }
     }
 
     pub(crate) fn host(self, host: String) -> Self {
@@ -359,6 +368,7 @@ impl NacosGrpcClientBuilder {
                 self.namespace,
                 self.labels,
                 self.client_abilities,
+                self.client_timeout
             );
 
             if let Some(connected_listener) = self.connected_listener {

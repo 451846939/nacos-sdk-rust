@@ -67,6 +67,7 @@ impl ConfigWorker {
             ))
             .unary_call_layer(auth_layer.clone())
             .bi_call_layer(auth_layer)
+            .client_timeout(client_props.get_client_timeout())
             .build(client_id);
 
         let remote_client = Arc::new(remote_client);

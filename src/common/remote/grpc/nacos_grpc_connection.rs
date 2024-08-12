@@ -63,6 +63,7 @@ where
         watch::Sender<Option<String>>,
         watch::Receiver<Option<String>>,
     ),
+    timeout: Option<Duration>, // Timeout duration
 }
 
 impl<M> NacosGrpcConnection<M>
@@ -82,6 +83,7 @@ where
         namespace: String,
         labels: HashMap<String, String>,
         client_abilities: NacosClientAbilities,
+        timeout: Option<Duration>, // Timeout duration
     ) -> Self {
         let connection_id_watcher = watch::channel(None);
 
@@ -98,6 +100,7 @@ where
             connection_id: None,
             retry_count: 0,
             connection_id_watcher,
+            timeout,
         }
     }
 
@@ -455,6 +458,7 @@ pub(crate) enum State<F, S> {
     Initializing(Box<dyn Future<Output = Result<(S, String), Error>> + Send>),
     Connected(S),
     Retry(Box<dyn Future<Output = ()> + Send>),
+    Timeout, // Additional state to handle timeout
 }
 
 impl<M> Service<Payload> for NacosGrpcConnection<M>
@@ -478,8 +482,9 @@ where
     ) -> std::task::Poll<Result<(), Self::Error>> {
         let _span_enter =
             debug_span!(parent: None, "grpc_connection", id = self.id.clone()).entered();
-
+        let start_time = std::time::Instant::now();
         loop {
+
             match self.state {
                 State::Idle => {
                     info!("create new connection.");
@@ -594,6 +599,13 @@ where
                 }
 
                 State::Retry(ref mut sleep) => {
+                    if let Some(timeout_duration) = self.timeout {
+                        if start_time.elapsed() >= timeout_duration {
+                            error!("Retrying operation timed out after {:?} seconds", timeout_duration);
+                            self.state = State::Timeout;
+                            continue;
+                        }
+                    }
                     let sleep = sleep.as_mut();
 
                     let sleep = unsafe { Pin::new_unchecked(sleep) };
@@ -603,6 +615,10 @@ where
                     }
                     self.state = State::Idle;
                     continue;
+                }
+                State::Timeout => {
+                    error!("operation timed out");
+                    return Poll::Ready(Err(Self::Error::TimeoutError));
                 }
             }
         }

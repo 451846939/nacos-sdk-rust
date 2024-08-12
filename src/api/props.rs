@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-
+use std::time::Duration;
 use crate::api::constants::*;
 use crate::properties::{get_value, get_value_bool, get_value_option, get_value_u32};
 
@@ -26,6 +26,8 @@ pub struct ClientProps {
     client_version: String,
     /// auth context
     auth_context: HashMap<String, String>,
+    /// client_timeout
+    client_timeout: Option<Duration>,
 }
 
 impl ClientProps {
@@ -129,6 +131,10 @@ impl ClientProps {
 
         Ok(result)
     }
+
+    pub(crate) fn get_client_timeout(&self) -> Option<Duration> {
+        self.client_timeout
+    }
 }
 
 #[allow(clippy::new_without_default)]
@@ -149,6 +155,7 @@ impl ClientProps {
             client_version,
             auth_context: HashMap::default(),
             grpc_port: None,
+            client_timeout: None,
         }
     }
 
@@ -199,6 +206,11 @@ impl ClientProps {
         self.labels.extend(labels);
         self
     }
+    /// Sets the client_timeout.
+    pub fn client_timeout(mut self, client_timeout: Duration) -> Self {
+        self.client_timeout = Some(client_timeout);
+        self
+    }
 
     /// Add auth username.
     #[cfg(feature = "auth-by-http")]
@@ -242,6 +254,7 @@ mod tests {
             labels: HashMap::new(),
             client_version: "test_version".to_string(),
             auth_context: HashMap::new(),
+            client_timeout: None,
         };
 
         let result = client_props.get_server_list();
