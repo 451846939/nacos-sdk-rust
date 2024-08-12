@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::Poll;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use async_stream::stream;
@@ -64,6 +64,7 @@ where
         watch::Receiver<Option<String>>,
     ),
     timeout: Option<Duration>, // Timeout duration
+    start_time: Option<Instant>,
 }
 
 impl<M> NacosGrpcConnection<M>
@@ -482,11 +483,20 @@ where
     ) -> std::task::Poll<Result<(), Self::Error>> {
         let _span_enter =
             debug_span!(parent: None, "grpc_connection", id = self.id.clone()).entered();
-        let start_time = std::time::Instant::now();
+
         loop {
+            if let Some(timeout_duration) = self.timeout {
+                if let Some(start_time) = self.start_time {
+                    if start_time.elapsed() >= timeout_duration {
+                        error!("Connection attempt timed out after {:?}", timeout_duration);
+                        return Poll::Ready(Err(Self::Error::TimeoutError));
+                    }
+                }
+            }
 
             match self.state {
                 State::Idle => {
+                    self.start_time = Some(Instant::now());
                     info!("create new connection.");
                     let send_ret = self.connection_id_watcher.0.send(None);
                     if let Err(e) = send_ret {
@@ -599,13 +609,6 @@ where
                 }
 
                 State::Retry(ref mut sleep) => {
-                    if let Some(timeout_duration) = self.timeout {
-                        if start_time.elapsed() >= timeout_duration {
-                            error!("Retrying operation timed out after {:?} seconds", timeout_duration);
-                            self.state = State::Timeout;
-                            continue;
-                        }
-                    }
                     let sleep = sleep.as_mut();
 
                     let sleep = unsafe { Pin::new_unchecked(sleep) };
