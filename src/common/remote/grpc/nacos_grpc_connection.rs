@@ -486,15 +486,6 @@ where
             debug_span!(parent: None, "grpc_connection", id = self.id.clone()).entered();
 
         loop {
-            if let Some(timeout_duration) = self.timeout {
-                if let Some(start_time) = self.start_time {
-                    if start_time.elapsed() >= timeout_duration {
-                        error!("Connection attempt timed out after {:?}", timeout_duration);
-                        return Poll::Ready(Err(Self::Error::TimeoutError));
-                    }
-                }
-            }
-
             match self.state {
                 State::Idle => {
                     self.start_time = Some(Instant::now());
@@ -512,6 +503,16 @@ where
                     continue;
                 }
                 State::Connecting(ref mut fut) => {
+                    if let Some(timeout_duration) = self.timeout {
+                        if let Some(start_time) = self.start_time {
+                            if start_time.elapsed() >= timeout_duration {
+                                error!("Connection attempt timed out after {:?}", timeout_duration);
+                                // return Poll::Ready(Err(Self::Error::TimeoutError));
+                                self.state = State::Timeout;
+                                continue;
+                            }
+                        }
+                    }
                     let pin = unsafe { Pin::new_unchecked(fut) };
                     let ret = pin.poll(cx);
                     match ret {
