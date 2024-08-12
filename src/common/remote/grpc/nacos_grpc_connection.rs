@@ -102,6 +102,7 @@ where
             retry_count: 0,
             connection_id_watcher,
             timeout,
+            start_time: None,
         }
     }
 
